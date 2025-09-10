@@ -16,7 +16,7 @@ bl_info = {
     "author": "LEDingQ",
     "description": "",
     "blender": (3, 4, 0),
-    "version": (0, 0, 1),
+    "version": (0, 1, 1),
     "location": "",
     "warning": "",
     "category": "Generic",
@@ -27,6 +27,11 @@ from bpy.props import StringProperty, BoolProperty, PointerProperty, FloatProper
 import os
 import time
 import subprocess
+
+
+def DebugPrint(*args):
+    if bpy.context.scene.text_manager_prefs.debug_mode:
+        print(*args)
 
 
 class ScriptManagerAddonPreferences(bpy.types.AddonPreferences):
@@ -50,11 +55,11 @@ class SCRIPTMANAGER_OT_TestOperator(bpy.types.Operator):
         text_name = [text.name for text in bpy.data.texts]
         for handler in bpy.app.handlers.frame_change_pre:
             if hasattr(handler, "_ScriptManagerItem_FC_ID"):
-                print(handler._ScriptManagerItem_FC_ID)
+                DebugPrint(handler._ScriptManagerItem_FC_ID)
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                print(handler._ScriptManagerItem_DC_ID)
-        print("Test Operator Executed")
+                DebugPrint(handler._ScriptManagerItem_DC_ID)
+        DebugPrint("Test Operator Executed")
         return {"FINISHED"}
 
 
@@ -92,6 +97,37 @@ class SCRIPTMANAGER_OT_remove_addon_handlers(bpy.types.Operator):
             item.run_in_desgaph_update = False
             item.run_in_frame_update = False
         return {"FINISHED"}
+
+
+class SCRIPTMANAGER_OT_remove_handler(bpy.types.Operator):
+    bl_idname = "script_manager.remove_handler"
+    bl_label = "Remove Handler by Name"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        removed = False
+        frame_change_pre_names = [handler.__name__ for handler in bpy.app.handlers.frame_change_pre]
+        depsgraph_update_post_names = [handler.__name__ for handler in bpy.app.handlers.depsgraph_update_post]
+        tmep = frame_change_pre_names + depsgraph_update_post_names
+        target_handler_names = tmep[context.scene.text_manager_prefs.handler_index]
+        # 移除 frame_change_pre 中的 handler
+        for handler in list(bpy.app.handlers.frame_change_pre):
+            if handler.__name__ == target_handler_names:
+                bpy.app.handlers.frame_change_pre.remove(handler)
+                removed = True
+
+        # 移除 depsgraph_update_post 中的 handler
+        for handler in list(bpy.app.handlers.depsgraph_update_post):
+            if handler.__name__ == target_handler_names:
+                bpy.app.handlers.depsgraph_update_post.remove(handler)
+                removed = True
+
+        if removed:
+            self.report({"INFO"}, f"已移除 Handler: {target_handler_names}")
+            return {"FINISHED"}
+        else:
+            self.report({"WARNING"}, f"未找到 Handler: {target_handler_names}")
+            return {"CANCELLED"}
 
 
 # 操作按钮
@@ -196,8 +232,9 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
 
     def execute(self, context):
         addon_prefs = context.preferences.addons[__name__].preferences
-        vscode_file_path = addon_prefs.vscode_path
+        vscode_path = addon_prefs.vscode_path.strip('"').strip()  # 去掉多余空格和引号
         text = bpy.data.texts.get(self.text_name)
+
         if text is None:
             self.report({"ERROR"}, "没有选择文本")
             return {"CANCELLED"}
@@ -211,15 +248,37 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
         if not os.path.exists(filepath):
             self.report({"ERROR"}, f"文件不存在: {filepath}")
             return {"CANCELLED"}
-        if not os.path.exists(vscode_file_path):
-            self.report({"ERROR"}, f"VSCode 路径错误: {vscode_file_path}")
-            return {"CANCELLED"}
+
+        # 处理 VSCode 路径
+        vscode_path = bpy.path.abspath(vscode_path)
+        if os.path.isdir(vscode_path):
+            # 如果是目录，自动补全 Code.exe
+            candidate = os.path.join(vscode_path, "Code.exe")
+            if os.path.exists(candidate):
+                vscode_path = candidate
+            else:
+                self.report({"ERROR"}, f"VSCode 路径是目录，未找到 Code.exe: {candidate}")
+                return {"CANCELLED"}
+
+        elif os.path.isfile(vscode_path):
+            # 如果是文件，直接用
+            if not vscode_path.lower().endswith("code.exe"):
+                self.report({"WARNING"}, f"指定的文件不是 Code.exe: {vscode_path}")
+        else:
+            # 如果路径不存在，尝试补全 Code.exe
+            candidate = vscode_path + "\\Code.exe"
+            if os.path.exists(candidate):
+                vscode_path = candidate
+            else:
+                self.report({"ERROR"}, f"VSCode 路径错误: {vscode_path}")
+                return {"CANCELLED"}
+
         try:
             # 调用 VSCode 打开文件
-            subprocess.Popen([vscode_file_path, filepath])
+            subprocess.Popen([vscode_path, filepath])
             return {"FINISHED"}
         except Exception as e:
-            self.report({"ERROR"}, str(e))
+            self.report({"ERROR"}, f"启动 VSCode 失败: {str(e)}")
             return {"CANCELLED"}
 
 
@@ -383,8 +442,24 @@ class PT_SCRIPTMANAGERTools(bpy.types.Panel):
                     row1.label(text=f"{display_val}")
                     obj, attr_name = eval(f"({item.path.rsplit('.',1)[0]}, '{item.path.rsplit('.',1)[1]}')")
                     if hasattr(obj, "bl_rna") and attr_name in obj.bl_rna.properties:
-                        row.prop(obj, attr_name, text="")
+                        # row.prop(obj, attr_name, text="", index=0)
+                        # 如果是向量属性（长度 2 或 3）
+                        attr_value = getattr(obj, attr_name)
+                        # 判断是否是颜色属性
+                        is_color = False
+                        if hasattr(obj.bl_rna.properties[attr_name], "subtype"):
+                            is_color = obj.bl_rna.properties[attr_name].subtype == "COLOR"
+                        if hasattr(attr_value, "__len__") and len(attr_value) in (2, 3) and not is_color:
+                            row_vec = row.row(align=True)  # align=True 可以取消间隔
+                            row_vec.prop(obj, attr_name, index=0, text="")
+                            row_vec.prop(obj, attr_name, index=1, text="")
+                            if len(attr_value) == 3:
+                                row_vec.prop(obj, attr_name, index=2, text="")
+                        else:
+                            # 普通 RNA 属性
+                            row.prop(obj, attr_name, text="")
                 except Exception as e:
+                    DebugPrint(f"Error previewing property: {e}")
                     row.label(text=f"Error: {e}", icon="ERROR")
             else:
                 row.label(text="无属性路径")
@@ -443,22 +518,40 @@ class PT_SCRIPTMANAGERDebug(bpy.types.Panel):
         layout = self.layout
         prefs = context.scene.text_manager_prefs
         col = layout.column()
+        col.prop(prefs, "debug_mode", text="打印调试信息", icon="SETTINGS")
         col.operator("script_manager.remove_addon_handlers", text="移除插件的Handler")
         col.label(text="插件的handler")
         box = col.box()
+        i = 0
         for handler in bpy.app.handlers.frame_change_pre:
             if hasattr(handler, "_ScriptManagerItem_FC_ID"):
-                box.label(text=f"帧更新: {handler._ScriptManagerItem_FC_ID}")
+                box.label(text=f"{i}.帧更新: {handler._ScriptManagerItem_FC_ID}")
+                i += 1
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                box.label(text=f"依赖图: {handler._ScriptManagerItem_DC_ID}")
+                box.label(text=f"{i}.依赖图: {handler._ScriptManagerItem_DC_ID}")
+                i += 1
         col.operator("script_manager.remove_all_handlers", text="移除所有Handler")
+        col.operator("script_manager.remove_handler", text="移除指定Handler")
+        col.prop(prefs, "handler_index", text="目标Handler")
+        i = 0
+        frame_change_pre_names = [handler.__name__ for handler in bpy.app.handlers.frame_change_pre]
+        depsgraph_update_post_names = [handler.__name__ for handler in bpy.app.handlers.depsgraph_update_post]
         col.label(text="所有handler")
         box = col.box()
-        for handler in bpy.app.handlers.frame_change_pre:
-            box.label(text=f"帧更新: {handler.__name__}")
-        for handler in bpy.app.handlers.depsgraph_update_post:
-            box.label(text=f"依赖图: {handler.__name__}")
+        for name in frame_change_pre_names:
+            row = box.row()
+            if i == prefs.handler_index:
+                row.alert = True  # 高亮这一行
+            row.label(text=f"{i}. 帧更新: {name}")
+            i += 1
+
+        for name in depsgraph_update_post_names:
+            row = box.row()
+            if i == prefs.handler_index:
+                row.alert = True  # 高亮这一行
+            row.label(text=f"{i}. 依赖图: {name}")
+            i += 1
 
 
 def use_frame_update(self, context):
@@ -518,7 +611,7 @@ def update_test_pointer(self, context):
         if item == self:
             continue
         if item.test_pointer and current_name and item.test_pointer.name == current_name:
-            # print("当前文本被其他 item 使用")
+            DebugPrint("当前文本被其他 item 使用")
             # 重置为 None，或者弹出提示
             item.test_pointer = None
             break
@@ -661,7 +754,7 @@ def make_ScriptManager_frame_update_handler(item_name):
             if temp.run_in_frame_update and temp.test_pointer and temp.test_pointer.name == ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID:
                 item = temp
         if item:
-            print("帧更新", ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID)
+            DebugPrint("帧更新", ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID)
             run_text_block(item.test_pointer)
             item.frame_update_flag = not item.frame_update_flag
             item.updata_flag = not item.updata_flag
@@ -682,8 +775,7 @@ def make_ScriptManager_depsgraph_update_handler(item_name):
             if temp.run_in_desgaph_update and temp.test_pointer and temp.test_pointer.name == ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID:
                 item = temp
         if item:
-            print("依赖图更新", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
-            # print("depsgraph 更新回调", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
+            DebugPrint("依赖图更新", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
             run_text_block(item.test_pointer)
             item.desgaph_updata_flag = not item.desgaph_updata_flag
             item.updata_flag = not item.updata_flag
@@ -733,6 +825,9 @@ class ScriptManagerPrefs(bpy.types.PropertyGroup):
     preview_properties: bpy.props.CollectionProperty(type=ScriptManagerPreviewPropertyItem)
     preview_properties_index: bpy.props.IntProperty(name="Index", default=0)
     preview_properties_num: bpy.props.IntProperty(name="Number", default=0)
+    handler_index: IntProperty(name="Handler Index", default=0, min=0)
+    target_handler_name: StringProperty(name="Target Handler Name", default="")
+    debug_mode: BoolProperty(name="Debug Mode", default=False)
 
 
 classes = (
@@ -747,6 +842,7 @@ classes = (
     PT_SCRIPTMANAGERDebug,
     SCRIPTMANAGER_OT_TestOperator,
     SCRIPTMANAGER_OT_remove_all_handlers,
+    SCRIPTMANAGER_OT_remove_handler,
     SCRIPTMANAGER_OT_add_item,
     SCRIPTMANAGER_OT_remove_item,
     SCRIPTMANAGER_OT_move_item_up,
