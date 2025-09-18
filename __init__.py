@@ -199,7 +199,7 @@ class SCRIPTMANAGER_OT_new_text(bpy.types.Operator):
         # 添加到 text_manager_collection
         item = prefs.text_manager_collection.add()
         item.text_name = new_text.name
-        item.test_pointer = new_text
+        item.text_pointer = new_text
         prefs.script_manager_index = len(prefs.text_manager_collection) - 1
 
         return {"FINISHED"}
@@ -376,19 +376,19 @@ class PT_SCRIPTMANAGERSubPanel(bpy.types.Panel):
         box = layout.box()
         if len(prefs.text_manager_collection) != 0:
             item = prefs.text_manager_collection[prefs.script_manager_index]
-            if item.test_pointer:
+            if item.text_pointer:
                 # 在box内部创建一行
                 row = box.row()
                 row.scale_y = 2.0  # 按钮放大
-                row.operator("script_manager.run_text", text="Run", icon="PLAY").text_name = item.test_pointer.name
+                row.operator("script_manager.run_text", text="Run", icon="PLAY").text_name = item.text_pointer.name
                 row = box.row()
-                row.operator("text_manager.open_in_vscode", text="Open in VSCode", icon="TEXT").text_name = item.test_pointer.name
+                row.operator("text_manager.open_in_vscode", text="Open in VSCode", icon="TEXT").text_name = item.text_pointer.name
                 row = box.row()
                 row.enabled = False
                 row.label(icon="RECORD_OFF" if not item.updata_flag else "RECORD_ON")
                 row.enabled = True
-                row.prop(item, "test_pointer", text="")
-                box.prop(item.test_pointer, "filepath", text="Filepath")
+                row.prop(item, "text_pointer", text="")
+                box.prop(item.text_pointer, "filepath", text="Filepath")
                 box.prop(item, "auto_reload", text="Auto Reload", icon="FILE_REFRESH")
                 row1 = box.row()
                 split = row1.split(factor=0.8)  # 左边占 70%，右边占 30%
@@ -561,11 +561,11 @@ def use_frame_update(self, context):
     if item.run_in_frame_update:
         has_handler = False
         for handler in bpy.app.handlers.frame_change_pre:
-            if hasattr(handler, "_ScriptManagerItem_FC_ID") and handler._ScriptManagerItem_FC_ID == item.test_pointer.name:
-                if item.test_pointer.name in handler._ScriptManagerItem_FC_ID:
+            if hasattr(handler, "_ScriptManagerItem_FC_ID") and handler._ScriptManagerItem_FC_ID == item.text_pointer.name:
+                if item.text_pointer.name in handler._ScriptManagerItem_FC_ID:
                     bpy.app.handlers.frame_change_pre.remove(handler)
                     has_handler = True
-        bpy.app.handlers.frame_change_pre.append(make_ScriptManager_frame_update_handler(item.test_pointer.name))
+        bpy.app.handlers.frame_change_pre.append(make_ScriptManager_frame_update_handler(item.text_pointer.name))
         if not has_handler:
             print("添加帧更新回调")
         else:
@@ -573,7 +573,7 @@ def use_frame_update(self, context):
     else:
         for handler in bpy.app.handlers.frame_change_pre:
             if hasattr(handler, "_ScriptManagerItem_FC_ID"):
-                if item.test_pointer.name in handler._ScriptManagerItem_FC_ID:
+                if item.text_pointer.name in handler._ScriptManagerItem_FC_ID:
                     bpy.app.handlers.frame_change_pre.remove(handler)
         print("移除帧更新回调")
 
@@ -586,10 +586,10 @@ def use_desgraph_update(self, context):
         has_handler = False
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                if item.test_pointer.name in handler._ScriptManagerItem_DC_ID:
+                if item.text_pointer.name in handler._ScriptManagerItem_DC_ID:
                     bpy.app.handlers.depsgraph_update_post.remove(handler)
                     has_handler = True
-        bpy.app.handlers.depsgraph_update_post.append(make_ScriptManager_depsgraph_update_handler(item.test_pointer.name))
+        bpy.app.handlers.depsgraph_update_post.append(make_ScriptManager_depsgraph_update_handler(item.text_pointer.name))
         if not has_handler:
             print("添加 depsgraph 更新回调")
         else:
@@ -597,23 +597,23 @@ def use_desgraph_update(self, context):
     else:
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                if item.test_pointer.name in handler._ScriptManagerItem_DC_ID:
+                if item.text_pointer.name in handler._ScriptManagerItem_DC_ID:
                     bpy.app.handlers.depsgraph_update_post.remove(handler)
         print("移除 depsgraph 更新回调")
 
 
 # NOTE 防止使用相同的TEXT
-def update_test_pointer(self, context):
+def update_text_pointer(self, context):
     prefs = context.scene.text_manager_prefs
-    current_name = self.test_pointer.name if self.test_pointer else None
+    current_name = self.text_pointer.name if self.text_pointer else None
     # 遍历其他 item
     for item in prefs.text_manager_collection:
         if item == self:
             continue
-        if item.test_pointer and current_name and item.test_pointer.name == current_name:
+        if item.text_pointer and current_name and item.text_pointer.name == current_name:
             DebugPrint("当前文本被其他 item 使用")
             # 重置为 None，或者弹出提示
-            item.test_pointer = None
+            item.text_pointer = None
             break
 
 
@@ -625,7 +625,7 @@ class ScriptManagerPreviewPropertyItem(bpy.types.PropertyGroup):
 class ScriptManagerItem(bpy.types.PropertyGroup):
     selected: BoolProperty(name="Selected", default=False)
     Remarks: StringProperty(name="Remarks", default="")
-    test_pointer: PointerProperty(type=bpy.types.Text, update=update_test_pointer)
+    text_pointer: PointerProperty(type=bpy.types.Text, update=update_text_pointer)
     auto_reload: BoolProperty(name="Auto Reload", default=False)
     run_in_frame_update: BoolProperty(name="Run In Frame Update", default=False, update=use_frame_update)
     frame_update_flag: BoolProperty(name="flag", default=False)
@@ -642,14 +642,14 @@ class SCRIPTMANAGER_UL_texts(bpy.types.UIList):
         row = layout.row(align=True)
         row.alignment = "LEFT"
         row.label(icon="RECORD_OFF" if not item.updata_flag else "RECORD_ON")
-        row.label(text="-" if item.test_pointer is None or not item.test_pointer.is_dirty else "*")
+        row.label(text="-" if item.text_pointer is None or not item.text_pointer.is_dirty else "*")
         row.label(text=f"{index}.")
         row.prop(item, "selected", text="", emboss=False, icon="CHECKBOX_DEHLT" if not item.selected else "CHECKBOX_HLT")
         row.alignment = "EXPAND"
-        row.prop(item, "test_pointer", text="")
+        row.prop(item, "text_pointer", text="")
         row.prop(item, "Remarks", text="", emboss=True, icon="BOOKMARKS")
         row.alignment = "RIGHT"
-        row.operator("script_manager.run_text", icon="PLAY", text="").text_name = item.test_pointer.name if item.test_pointer else ""
+        row.operator("script_manager.run_text", icon="PLAY", text="").text_name = item.text_pointer.name if item.text_pointer else ""
 
 
 def auto_reload_timer_callback():
@@ -660,7 +660,7 @@ def auto_reload_timer_callback():
     # print("自动重载定时器回调")
     # 遍历所有管理的文本
     for item in prefs.text_manager_collection:
-        text = item.test_pointer
+        text = item.text_pointer
         if text is None:
             continue
         # print(text.name, text.is_modified, text.is_dirty)
@@ -751,11 +751,11 @@ def make_ScriptManager_frame_update_handler(item_name):
         prefs = scene.text_manager_prefs
         item = None
         for temp in prefs.text_manager_collection:
-            if temp.run_in_frame_update and temp.test_pointer and temp.test_pointer.name == ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID:
+            if temp.run_in_frame_update and temp.text_pointer and temp.text_pointer.name == ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID:
                 item = temp
         if item:
             DebugPrint("帧更新", ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID)
-            run_text_block(item.test_pointer)
+            run_text_block(item.text_pointer)
             item.frame_update_flag = not item.frame_update_flag
             item.updata_flag = not item.updata_flag
             elapsed = (time.perf_counter() - start_time) * 1000  # 运行耗时(毫秒)
@@ -772,11 +772,11 @@ def make_ScriptManager_depsgraph_update_handler(item_name):
         prefs = scene.text_manager_prefs
         item = None
         for temp in prefs.text_manager_collection:
-            if temp.run_in_desgaph_update and temp.test_pointer and temp.test_pointer.name == ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID:
+            if temp.run_in_desgaph_update and temp.text_pointer and temp.text_pointer.name == ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID:
                 item = temp
         if item:
             DebugPrint("依赖图更新", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
-            run_text_block(item.test_pointer)
+            run_text_block(item.text_pointer)
             item.desgaph_updata_flag = not item.desgaph_updata_flag
             item.updata_flag = not item.updata_flag
             elapsed = (time.perf_counter() - start_time) * 1000  # 运行耗时(毫秒)
@@ -795,7 +795,7 @@ def update_script_manager_index(self, context):
         return
 
     item = prefs.text_manager_collection[index]
-    text = item.test_pointer
+    text = item.text_pointer
     if text is None:
         return
 
@@ -856,13 +856,109 @@ classes = (
 )
 
 
+@bpy.app.handlers.persistent
+def ScriptManager_load_post_handler(dummy):
+    """文件加载完成后的处理函数"""
+    print("ScriptManager: 加载了新文件")
+
+    # 延迟执行以确保上下文完全准备好
+    def delayed_restore():
+        restore_handlers()
+        return None
+
+    bpy.app.timers.register(delayed_restore, first_interval=0.1)
+
+
+def restore_handlers():
+    """恢复之前注册的handlers"""
+    # 检查上下文是否准备就绪
+    try:
+        if not hasattr(bpy.context, "scene") or not bpy.context.scene:
+            print("ScriptManager: 上下文未准备好")
+            return False
+    except:
+        print("ScriptManager: 无法访问上下文")
+        return False
+
+    try:
+        prefs = bpy.context.scene.text_manager_prefs
+        if not prefs:
+            print("ScriptManager: prefs未准备好")
+            return False
+    except:
+        print("ScriptManager: 无法访问prefs")
+        return False
+
+    print(f"ScriptManager: 开始恢复handlers，共有 {len(prefs.text_manager_collection)} 个items")
+
+    handlers_restored = False
+
+    # 恢复帧更新handlers
+    for item in prefs.text_manager_collection:
+        if item.text_pointer and item.run_in_frame_update:
+            has_handler = False
+            # 检查是否已经存在对应的handler
+            for handler in bpy.app.handlers.frame_change_pre:
+                if hasattr(handler, "_ScriptManagerItem_FC_ID") and handler._ScriptManagerItem_FC_ID == item.text_pointer.name:
+                    has_handler = True
+                    break
+
+            # 如果不存在，则添加
+            if not has_handler:
+                handler_func = make_ScriptManager_frame_update_handler(item.text_pointer.name)
+                bpy.app.handlers.frame_change_pre.append(handler_func)
+                print(f"ScriptManager: 恢复帧更新handler: {item.text_pointer.name}")
+                handlers_restored = True
+
+    # 恢复依赖图更新handlers
+    for item in prefs.text_manager_collection:
+        if item.text_pointer and item.run_in_desgaph_update:
+            has_handler = False
+            # 检查是否已经存在对应的handler
+            for handler in bpy.app.handlers.depsgraph_update_post:
+                if hasattr(handler, "_ScriptManagerItem_DC_ID") and handler._ScriptManagerItem_DC_ID == item.text_pointer.name:
+                    has_handler = True
+                    break
+
+            # 如果不存在，则添加
+            if not has_handler:
+                handler_func = make_ScriptManager_depsgraph_update_handler(item.text_pointer.name)
+                bpy.app.handlers.depsgraph_update_post.append(handler_func)
+                print(f"ScriptManager: 恢复依赖图更新handler: {item.text_pointer.name}")
+                handlers_restored = True
+
+    if handlers_restored:
+        print("ScriptManager: handlers恢复完成")
+    else:
+        print("ScriptManager: 没有需要恢复的handlers")
+
+    return handlers_restored
+
+
 def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.text_manager_prefs = PointerProperty(type=ScriptManagerPrefs)
+    print("ScriptManager: 脚本管理器注册成功")
+
+    # 注册文件加载完成后的处理函数
+    bpy.app.handlers.load_post.append(ScriptManager_load_post_handler)
+    print("ScriptManager: 已注册ScriptManager_load_post_handler")
+
+    # 在注册完成后恢复handlers（针对插件重新启用的情况）
+    def delayed_restore():
+        restore_handlers()
+        return None
+
+    bpy.app.timers.register(delayed_restore, first_interval=1.0)
 
 
 def unregister():
+    # 移除文件加载完成后的处理函数
+    if ScriptManager_load_post_handler in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(ScriptManager_load_post_handler)
+        print("ScriptManager: 已移除ScriptManager_load_post_handler")
+
     del bpy.types.Scene.text_manager_prefs
 
     for c in reversed(classes):
