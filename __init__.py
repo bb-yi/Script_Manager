@@ -27,6 +27,8 @@ from bpy.props import StringProperty, BoolProperty, PointerProperty, FloatProper
 import os
 import time
 import subprocess
+import hashlib
+import sys
 
 
 def DebugPrint(*args):
@@ -51,15 +53,20 @@ class SCRIPTMANAGER_OT_TestOperator(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        prefs = context.scene.text_manager_prefs
-        text_name = [text.name for text in bpy.data.texts]
-        for handler in bpy.app.handlers.frame_change_pre:
-            if hasattr(handler, "_ScriptManagerItem_FC_ID"):
-                DebugPrint(handler._ScriptManagerItem_FC_ID)
-        for handler in bpy.app.handlers.depsgraph_update_post:
-            if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                DebugPrint(handler._ScriptManagerItem_DC_ID)
-        DebugPrint("Test Operator Executed")
+
+        print("订阅成功")
+        return {"FINISHED"}
+
+
+class SCRIPTMANAGER_OT_Test1Operator(bpy.types.Operator):
+    bl_idname = "object.test1_operator"
+    bl_label = "Test Operator"
+    bl_description = "This is a test operator"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        bpy.msgbus.clear_by_owner("1235")
+        print("清理完毕")
         return {"FINISHED"}
 
 
@@ -345,7 +352,8 @@ class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
         scene = context.scene
         layout = self.layout
         col = layout.column()
-        # col.operator("object.test_operator", text="Test Operator") #测试操作符
+        col.operator("object.test_operator", text="Test Operator")  # 测试操作符
+        col.operator("object.test1_operator", text="Test1 Operator")  # 测试操作符
         col.operator("script_manager.new_text", text="New Text")
         row = col.row()
         row.template_list("SCRIPTMANAGER_UL_texts", "", scene.text_manager_prefs, "text_manager_collection", scene.text_manager_prefs, "script_manager_index", rows=6)
@@ -811,6 +819,198 @@ def update_script_manager_index(self, context):
                 break  # 只切一个文本编辑器
 
 
+class ScriptManagerMsgBusItem(bpy.types.PropertyGroup):
+    Remarks: StringProperty(name="Remarks", default="")
+    RNA_path: StringProperty(name="RNA Path", default="")
+    text_pointer: PointerProperty(type=bpy.types.Text)
+    is_registered: BoolProperty(name="Is Registered", default=False)
+
+
+class SCRIPTMANAGER_UL_MsgBus(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.alignment = "LEFT"
+        row.label(text=f"{index}.")
+        row.alignment = "EXPAND"
+        row.prop(item, "Remarks", text="", icon="BOOKMARKS")
+        row.prop(item, "RNA_path", text="")
+        row.prop(item, "text_pointer", text="")
+        op = row.operator("script_manager.msgbus_register_msgbus", icon="PLUS", text="")
+        op.RNA_path = item.RNA_path
+        op.text_name = item.text_pointer.name if item.text_pointer else ""
+        op1 = row.operator("script_manager.msgbus_unregister_msgbus", icon="TRASH", text="")
+        op1.RNA_path = item.RNA_path
+        # row.label(text="ID:" + generate_unique_id(item.RNA_path))
+
+
+class ScriptManagerMsgBusPanel(bpy.types.Panel):
+    bl_idname = "VIEW3D_PT_ScriptManagerMsgBusPanel"
+    bl_label = "MsgBus"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Script Manager"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        box = col.box()
+        box.label(text="使用msgbus监控属性变化")
+        box.label(text="只使用于RNA属性,视图更新和动画更新不起作用")
+        row = col.row()
+        row.template_list("SCRIPTMANAGER_UL_MsgBus", "", context.scene.text_manager_prefs, "msgbus_collection", context.scene.text_manager_prefs, "msgbus_index", rows=5)
+        col1 = row.column(align=True)
+        col1.operator("script_manager.msgbus_add_item", icon="ADD", text="")
+        col1.operator("script_manager.msgbus_remove_item", icon="REMOVE", text="")
+        col1.separator()
+        col1.operator("script_manager.msgbus_move_item_up", icon="TRIA_UP", text="")
+        col1.operator("script_manager.msgbus_move_item_down", icon="TRIA_DOWN", text="")
+
+
+class ScriptManagerMsgBus_OT_add_item(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_add_item"
+    bl_label = "Add MsgBus Item"
+
+    def execute(self, context):
+        prefs = context.scene.text_manager_prefs
+        item = prefs.msgbus_collection.add()
+        item.RNA_path = "RNA Path"
+        prefs.msgbus_index = len(prefs.msgbus_collection) - 1
+        return {"FINISHED"}
+
+
+class ScriptManagerMsgBus_OT_remove_item(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_remove_item"
+    bl_label = "Remove MsgBus Item"
+
+    def execute(self, context):
+        prefs = context.scene.text_manager_prefs
+        # 先收集所有选中项的索引
+        selected_indices = [i for i, item in enumerate(prefs.msgbus_collection) if getattr(item, "selected", False)]
+
+        if selected_indices:
+            # 倒序删除，避免索引错位
+            for idx in reversed(selected_indices):
+                prefs.msgbus_collection.remove(idx)
+            # 更新 active_index
+            prefs.msgbus_index = min(selected_indices[0], len(prefs.msgbus_collection) - 1)
+        else:
+            # 如果没有选中项，就删除当前 active_index
+            idx = prefs.msgbus_index
+            if 0 <= idx < len(prefs.msgbus_collection):
+                prefs.msgbus_collection.remove(idx)
+                prefs.msgbus_index = max(0, idx - 1)
+        return {"FINISHED"}
+
+
+class ScriptManagerMsgBus_OT_move_item_up(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_move_item_up"
+    bl_label = "Move MsgBus Item Up"
+
+    def execute(self, context):
+        prefs = context.scene.text_manager_prefs
+        index = prefs.msgbus_index
+        if index > 0:
+            prefs.msgbus_index = index - 1
+            prefs.msgbus_collection.move(index, index - 1)
+        return {"FINISHED"}
+
+
+class ScriptManagerMsgBus_OT_move_item_down(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_move_item_down"
+    bl_label = "Move MsgBus Item Down"
+
+    def execute(self, context):
+        prefs = context.scene.text_manager_prefs
+        index = prefs.msgbus_index
+        if index < len(prefs.msgbus_collection) - 1:
+            prefs.msgbus_index = index + 1
+            prefs.msgbus_collection.move(index, index + 1)
+        return {"FINISHED"}
+
+
+# 输入一个字符串，输出一个唯一的ID
+def generate_unique_id(path_str: str, length: int = 5) -> str:
+    # 使用 SHA-256 哈希输入，确保唯一
+    hash_obj = hashlib.sha256(path_str.encode("utf-8"))
+    hash_hex = hash_obj.hexdigest()
+
+    # 取前 length 位
+    unique_id = hash_hex[:length]
+
+    return unique_id
+
+
+# NOTE 制作属性监听回调函数
+def make_ScriptManagerMsgBus_update_callback(owner, text_name):
+    def ScriptManagerMsgBus_update_callback():
+        print(f"{owner}属性更新了,执行{text_name}")
+        run_text_block(bpy.data.texts[text_name])
+
+    return ScriptManagerMsgBus_update_callback
+
+
+class ScriptManagerMsgBus_OT_register_msgbus(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_register_msgbus"
+    bl_label = "Register MsgBus Handlers"
+
+    RNA_path: StringProperty(name="RNA Path")
+    text_name: StringProperty(name="Text Name")
+
+    def execute(self, context):
+        print(f"注册MsgBus监控: {self.RNA_path} - {self.text_name}")
+        bpy.msgbus.subscribe_rna(
+            key=self.get_msgbus_key(self.RNA_path),
+            owner=sys.intern(str(self.RNA_path).strip()),  # 保证注册时和注销时是完全一致的对象
+            args=(),
+            notify=make_ScriptManagerMsgBus_update_callback(self.RNA_path, self.text_name),
+        )
+        print("订阅成功")
+        return {"FINISHED"}
+        # 将数据路径转换为key
+
+    def get_msgbus_key(self, path_str: str) -> object:
+        try:
+            # 步骤1: 解析路径，提取基对象字符串和属性名
+            # 假设路径以 .property 结尾，使用字符串分割
+            if "." not in path_str:
+                raise ValueError("路径必须包含属性，如 'bpy.data.scenes[\"Scene\"].frame_current'")
+
+            parts = path_str.split(".")
+            property_name = parts[-1]  # 最后一个部分是属性名，如 'frame_current'
+            base_str = ".".join(parts[:-1])  # 基对象，如 'bpy.data.scenes["Scene"]'
+
+            # 步骤2: 在安全的 bpy 命名空间中评估基对象
+            # 使用 globals() 只包含 bpy，避免 eval 风险
+            base_obj = eval(base_str, {"__builtins__": {}}, {"bpy": bpy})
+
+            if base_obj is None:
+                raise ValueError(f"无法解析基对象: {base_str}")
+
+            # 步骤3: 使用 path_resolve 获取 RNA key（coerce=False 确保纯 RNA 指针）
+            key = base_obj.path_resolve(property_name, False)
+
+            if key is None:
+                raise ValueError(f"属性 '{property_name}' 在对象中无效")
+
+            return key
+
+        except Exception as e:
+            print(f"解析错误: {e}")
+            return None
+
+
+class ScriptManagerMsgBus_OT_unregister_msgbus(bpy.types.Operator):
+    bl_idname = "script_manager.msgbus_unregister_msgbus"
+    bl_label = "Unregister MsgBus Handlers"
+
+    RNA_path: StringProperty(name="RNA Path")
+
+    def execute(self, context):
+        print(f"注销MsgBus监控: {self.RNA_path}")
+        bpy.msgbus.clear_by_owner(sys.intern(str(self.RNA_path).strip()))
+        return {"FINISHED"}
+
+
 # 插件属性组
 class ScriptManagerPrefs(bpy.types.PropertyGroup):
     # 是否启用自动重载定时器
@@ -828,19 +1028,25 @@ class ScriptManagerPrefs(bpy.types.PropertyGroup):
     handler_index: IntProperty(name="Handler Index", default=0, min=0)
     target_handler_name: StringProperty(name="Target Handler Name", default="")
     debug_mode: BoolProperty(name="Debug Mode", default=False)
+    msgbus_collection: CollectionProperty(type=ScriptManagerMsgBusItem)
+    msgbus_index: IntProperty(name="MsgBus Index", default=0)
 
 
 classes = (
     ScriptManagerAddonPreferences,
     ScriptManagerPreviewPropertyItem,
     ScriptManagerItem,
+    ScriptManagerMsgBusItem,
     ScriptManagerPrefs,
     SCRIPTMANAGER_UL_texts,
+    SCRIPTMANAGER_UL_MsgBus,
     PT_SCRIPTMANAGERPanel,
     PT_SCRIPTMANAGERSubPanel,
     PT_SCRIPTMANAGERTools,
     PT_SCRIPTMANAGERDebug,
+    ScriptManagerMsgBusPanel,
     SCRIPTMANAGER_OT_TestOperator,
+    SCRIPTMANAGER_OT_Test1Operator,
     SCRIPTMANAGER_OT_remove_all_handlers,
     SCRIPTMANAGER_OT_remove_handler,
     SCRIPTMANAGER_OT_add_item,
@@ -853,6 +1059,12 @@ classes = (
     SCRIPT_MANAGER_OT_add_preview_property,
     SCRIPT_MANAGER_OT_remove_preview_property,
     SCRIPTMANAGER_OT_remove_addon_handlers,
+    ScriptManagerMsgBus_OT_add_item,
+    ScriptManagerMsgBus_OT_remove_item,
+    ScriptManagerMsgBus_OT_move_item_up,
+    ScriptManagerMsgBus_OT_move_item_down,
+    ScriptManagerMsgBus_OT_register_msgbus,
+    ScriptManagerMsgBus_OT_unregister_msgbus,
 )
 
 
