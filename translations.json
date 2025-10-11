@@ -1,0 +1,176 @@
+{
+  "New Text":
+  {
+    "en": "New Text",
+    "zh": "新文本"
+  },
+      "Use Auto Reload Timer":
+  {
+    "en": "Use Auto Reload Timer",
+    "zh": "使用自动重载定时器"
+    },
+    "VSCode Path":
+  {
+    "en": "VSCode Path",
+    "zh": "VSCode 路径"
+    },
+    "Handler removed: {str}" :
+    {
+    "en": "Handler removed: {str}",
+    "zh": "移除 Handler：{str}"
+    },
+    "Handler not found: {str}" :
+    {
+    "en": "Handler not found: {str}",
+    "zh": "未找到 Handler：{str}"
+    },
+    "No text selected":
+    {
+    "en": "No text selected",
+    "zh": "没有选择文本"
+    },
+    "Text not saved":
+    {
+    "en": "Text not saved",
+    "zh": "文本没有保存"
+    },
+    "Auto-reload timer interval": {
+    "en": "Auto-reload timer interval",
+    "zh": "自动重载定时器间隔"
+  },
+  "No text data block specified": {
+    "en": "No text data block specified",
+    "zh": "未指定文本数据块"
+  },
+  "No available text data block":
+  {
+    "en": "No available text data block",
+    "zh": "没有可用的文本数据块"
+  },
+  "No property path":
+  {
+    "en": "No property path",
+    "zh": "没有属性路径"
+  }, 
+  "[Not iterable]":
+  {
+    "en": "[Not iterable]",
+    "zh": "[不可遍历]"
+  },
+  "Print debug info":
+  {
+    "en": "Print debug info",
+    "zh": "打印调试信息"
+  },
+  "Restore handlers and triggers when opening file":
+  {
+    "en": "Restore handlers and triggers when opening file",
+    "zh": "打开文件时恢复 Handler 和 Trigger"
+  },
+  "Remove plugin handler":
+  {
+    "en": "Remove plugin handler",
+    "zh": "移除插件 Handler"
+  },
+  "Plugin handler":
+  {
+    "en": "Plugin handler",
+    "zh": "插件 Handler"
+  },
+  "Remove all handlers":
+  {
+    "en": "Remove all handlers",
+    "zh": "移除所有 Handler"
+  },
+  "Remove specified handler":
+  {
+    "en": "Remove specified handler",
+    "zh": "移除指定的 Handler"
+  },
+  "Target Handler":
+  {
+    "en": "Target Handler",
+    "zh": "目标 Handler"
+  },
+  "All handlers":
+  {
+    "en": "All handlers",
+    "zh": "所有 Handler"
+  },
+  "Add frame update":
+  {
+    "en": "Add frame update",
+    "zh": "添加帧更新"
+  },
+  "Frame update updated":
+  {
+    "en": "Frame update updated",
+    "zh": "帧更新已更新"
+  },
+  "Remove frame update":
+  {
+    "en": "Remove frame update",
+    "zh": "移除帧更新"
+  },
+  "Add depsgraph update":
+  {
+    "en": "Add depsgraph update",
+    "zh": "添加 depsgraph 更新"
+    },
+    "Depsgraph update updated":
+  {
+    "en": "Depsgraph update updated",
+    "zh": "depsgraph 更新已更新"
+  },
+  "Remove depsgraph update":
+  {
+    "en": "Remove depsgraph update",
+    "zh": "移除 depsgraph 更新"
+  },
+  "Current text is used by another item":
+  {
+    "en": "Current text is used by another item",
+    "zh": "当前文本被其他项使用"
+  },
+  "Auto-reload timer started":
+  {
+    "en": "Auto-reload timer started",
+    "zh": "自动重载定时器已启动"
+  },
+  "Auto-reload timer restarted":
+  {
+    "en": "Auto-reload timer restarted",
+    "zh": "自动重载定时器已重新启动"
+  },
+  "Auto-reload timer stopped":
+  {
+    "en": "Auto-reload timer stopped",
+    "zh": "自动重载定时器已停止"
+  },
+  "Auto-reload timer not started":
+  {
+    "en": "Auto-reload timer not started",
+    "zh": "自动重载定时器未启动"
+  },
+  "Monitor property changes using msgbus": {
+    "en": "Monitor property changes using msgbus",
+    "zh": "使用msgbus监控属性变化"
+  },
+  "Only works for RNA properties; view updates and animation updates have no effect": {
+    "en": "Only works for RNA properties; view updates and animation updates have no effect",
+    "zh": "只适用于RNA属性,视图更新和动画更新不起作用"
+  },
+  "Geometry node socket properties are not supported": {
+    "en": "Geometry node socket properties are not supported",
+    "zh": "几何节点的插槽属性没有作用"
+  },
+  "Item content:   Note   |   Monitored property path    |   Script to execute   |   Is active    |   Last execution time": {
+    "en": "Item content:   Note   |   Monitored property path    |   Script to execute   |   Is active    |   Last execution time",
+    "zh": "条目内容:   备注   |   监控属性路径    |   执行的脚本   |   是否运行    |   上次运行耗时"
+  },
+  "This item is not unregistered. Please unregister it before deleting.":
+  {
+    "en": "This item is not unregistered. Please unregister it before deleting.",
+    "zh": "此条目未注销.请删除之前注销."
+  }
+}

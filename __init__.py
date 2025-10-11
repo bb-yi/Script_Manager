@@ -1,16 +1,3 @@
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTIBILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
-
 bl_info = {
     "name": "Script Manager",
     "author": "LEDingQ",
@@ -22,6 +9,7 @@ bl_info = {
     "category": "Generic",
 }
 
+
 import bpy
 from bpy.props import StringProperty, BoolProperty, PointerProperty, FloatProperty, CollectionProperty, IntProperty
 import os
@@ -29,6 +17,7 @@ import time
 import subprocess
 import hashlib
 import sys
+from .i18n import _, load_language, _f
 
 
 def DebugPrint(*args):
@@ -38,47 +27,11 @@ def DebugPrint(*args):
 
 class ScriptManagerAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__  # 插件的 module 名
-
-    vscode_path: bpy.props.StringProperty(name="VSCode 路径", subtype="FILE_PATH")
+    vscode_path: bpy.props.StringProperty(name=_("VSCode Path"), subtype="FILE_PATH")
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "vscode_path")
-
-
-class SCRIPTMANAGER_OT_TestOperator(bpy.types.Operator):
-    bl_idname = "object.test_operator"
-    bl_label = "Test Operator"
-    bl_description = "This is a test operator"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        # key = get_msgbus_key1('bpy.data.objects["Cube"].modifiers["GeometryNodes"]["Socket_2"]')
-        # print(key)
-        # key = bpy.data.objects["Cube"].modifiers["GeometryNodes"].path_resolve('["Socket_2"]', False)
-        key = bpy.context.scene.objects["Cube"].modifiers["GeometryNodes"]["Socket_2"]
-        print(key)
-        bpy.msgbus.subscribe_rna(
-            key=key,
-            # key=bpy.data.objects["Cube"].location,
-            owner="1234",
-            args=(1, 2, 3),
-            notify=update_callback,
-        )
-        DebugPrint("订阅成功")
-        return {"FINISHED"}
-
-
-class SCRIPTMANAGER_OT_Test1Operator(bpy.types.Operator):
-    bl_idname = "object.test1_operator"
-    bl_label = "Test Operator"
-    bl_description = "This is a test operator"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        bpy.msgbus.clear_by_owner("1234")
-        DebugPrint("清理完毕")
-        return {"FINISHED"}
 
 
 class SCRIPTMANAGER_OT_remove_all_handlers(bpy.types.Operator):
@@ -141,10 +94,10 @@ class SCRIPTMANAGER_OT_remove_handler(bpy.types.Operator):
                 removed = True
 
         if removed:
-            self.report({"INFO"}, f"已移除 Handler: {target_handler_names}")
+            self.report({"INFO"}, _f("Handler removed: {str}", str=target_handler_names))
             return {"FINISHED"}
         else:
-            self.report({"WARNING"}, f"未找到 Handler: {target_handler_names}")
+            self.report({"WARNING"}, _f("Handler not found: {str}", str=target_handler_names))
             return {"CANCELLED"}
 
 
@@ -243,13 +196,12 @@ class SCRIPTMANAGER_OT_move_item_down(bpy.types.Operator):
 
 def save_text_with_browser(text, context):
     """
-    保存指定 Text，弹出文件浏览器（跨上下文）。
+    保存指定 Text，弹出文件浏览器(跨上下文)。
     """
-    # 步骤1: 预设默认路径（可选，用户可改）
+
     if not text.filepath:
         text.filepath = os.path.join("C:/temp/", text.name)  # 默认路径
 
-    # 步骤2: 查找现有 Text Editor 区域
     text_area = None
     created_new_area = False
     for area in context.screen.areas:
@@ -257,40 +209,37 @@ def save_text_with_browser(text, context):
             text_area = area
             break
 
-    # 步骤3: 如果无，创建临时 Text Editor 区域（最小分割，避免 UI 混乱）
+    # 如果没有 Text Editor 区域，则创建一个
     if not text_area:
         # 分割当前区域左侧
         bpy.ops.screen.area_split(direction="VERTICAL", factor=0.01)
-        text_area = context.screen.areas[-1]  # 新区域自动活跃
+        text_area = context.screen.areas[-1]
         text_area.type = "TEXT_EDITOR"
         created_new_area = True
-        space = text_area.spaces.active  # 获取 Space.TEX
+        space = text_area.spaces.active
         if space.type != "TEXT_EDITOR":
-            space.type = "TEXT_EDITOR"  # 确保空间类型正确
-        space.text = text  # 设置text为激活文本
+            space.type = "TEXT_EDITOR"
+        space.text = text
 
-    # 步骤4: 覆盖上下文（模拟 Text Editor + 指定 text）
     override = {
         "window": context.window,
         "screen": context.screen,
-        "area": text_area,  # 用 Text Editor 区域
-        "region": text_area.regions[-1],  # 主视图区域（最后一个通常是视图）
-        "edit_text": text,  # 指定活跃 Text
+        "area": text_area,
+        "region": text_area.regions[-1],
+        "edit_text": text,
     }
     try:
         with context.temp_override(**override):
             pass
-            bpy.ops.text.save_as("INVOKE_DEFAULT")  # 弹出浏览器，模态执行
+            bpy.ops.text.save_as("INVOKE_DEFAULT")
         return True
     except RuntimeError as e:
-        print(f"保存失败: {e}")
+        print(f"Save text failed: {e}")
         return False
     finally:
-        # 步骤5: 清理临时区域（如果创建） - 简化：直接合并活跃区域（新区域已活跃）
         if created_new_area:
-            # 新区域已活跃，无需设置 index，直接合并
-            bpy.ops.screen.area_join()  # 合并当前活跃区域（text_area）回原布局
-            print("临时 Text Editor 已清理")
+            bpy.ops.screen.area_join()
+            print("Temporary Text Editor has been cleaned up")
 
 
 class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
@@ -302,16 +251,16 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
 
     def execute(self, context):
         addon_prefs = context.preferences.addons[__name__].preferences
-        vscode_path = addon_prefs.vscode_path.strip('"').strip()  # 去掉多余空格和引号
+        vscode_path = addon_prefs.vscode_path.strip('"').strip()
         # vscode_path = "D:/rj/vscode/Microsoft VS Code/Code.exe"#调试用
         text = bpy.data.texts.get(self.text_name)
 
         if text is None:
-            self.report({"ERROR"}, "没有选择文本")
+            self.report({"ERROR"}, _("No text selected"))
             return {"CANCELLED"}
 
         if not text.filepath:
-            self.report({"ERROR"}, "文本没有保存")
+            self.report({"ERROR"}, _("Text not saved"))
             success = save_text_with_browser(text, context)
             self.report({"INFO"}, f"{success}")
             return {"FINISHED"}
@@ -319,7 +268,7 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
         filepath = bpy.path.abspath(text.filepath)
 
         if not os.path.exists(filepath):
-            self.report({"ERROR"}, f"文件不存在: {filepath}")
+            self.report({"ERROR"}, f"File not found: {filepath}")
             return {"CANCELLED"}
 
         # 处理 VSCode 路径
@@ -330,20 +279,20 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
             if os.path.exists(candidate):
                 vscode_path = candidate
             else:
-                self.report({"ERROR"}, f"VSCode 路径是目录，未找到 Code.exe: {candidate}")
+                self.report({"ERROR"}, f"VSCode path is a directory, Code.exe not found: {candidate}")
                 return {"CANCELLED"}
 
         elif os.path.isfile(vscode_path):
             # 如果是文件，直接用
             if not vscode_path.lower().endswith("code.exe"):
-                self.report({"WARNING"}, f"指定的文件不是 Code.exe: {vscode_path}")
+                self.report({"WARNING"}, f"The specified file is not Code.exe: {vscode_path}")
         else:
             # 如果路径不存在，尝试补全 Code.exe
             candidate = vscode_path + "\\Code.exe"
             if os.path.exists(candidate):
                 vscode_path = candidate
             else:
-                self.report({"ERROR"}, f"VSCode 路径错误: {vscode_path}")
+                self.report({"ERROR"}, f"Invalid VSCode path: {vscode_path}")
                 return {"CANCELLED"}
 
         try:
@@ -351,7 +300,7 @@ class SCRIPTMANAGER_OT_open_in_vscode(bpy.types.Operator):
             subprocess.Popen([vscode_path, filepath])
             return {"FINISHED"}
         except Exception as e:
-            self.report({"ERROR"}, f"启动 VSCode 失败: {str(e)}")
+            self.report({"ERROR"}, f"Failed to launch VSCode: {str(e)}")
             return {"CANCELLED"}
 
 
@@ -409,7 +358,7 @@ auto_reload_flag = False
 
 class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
     bl_idname = "OBJECT_PT_script_manager"
-    bl_label = "脚本管理器"
+    bl_label = "Script Manager"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Script Manager"
@@ -418,9 +367,7 @@ class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
         scene = context.scene
         layout = self.layout
         col = layout.column()
-        # col.operator("object.test_operator", text="Test Operator")  # 测试操作符
-        # col.operator("object.test1_operator", text="Test1 Operator")  # 测试操作符移除所有回调
-        col.operator("script_manager.new_text", text="New Text")
+        col.operator("script_manager.new_text", text=_("New Text"))
         row = col.row()
         row.template_list("SCRIPTMANAGER_UL_texts", "", scene.text_manager_prefs, "text_manager_collection", scene.text_manager_prefs, "script_manager_index", rows=6)
         col1 = row.column(align=True)
@@ -431,15 +378,15 @@ class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
         col1.operator("script_manager.move_item_down", icon="TRIA_DOWN", text="")
         row = col.row()
         split = row.split(factor=0.8)
-        split.prop(scene.text_manager_prefs, "use_auto_reload_timer", text="使用自动重载定时器", icon="TIME")
+        split.prop(scene.text_manager_prefs, "use_auto_reload_timer", text=_("Use Auto Reload Timer"), icon="TIME")
         split.label(text=f"{scene.text_manager_prefs.auto_reload_use_time:.2f}ms", icon="RECORD_OFF" if not auto_reload_flag else "RECORD_ON")
-        col.prop(scene.text_manager_prefs, "auto_reload_timer_interval", text="自动重载定时器间隔")
+        col.prop(scene.text_manager_prefs, "auto_reload_timer_interval", text=_("Auto-reload timer interval"))
 
 
 class PT_SCRIPTMANAGERSubPanel(bpy.types.Panel):
     bl_idname = "OBJECT_PT_script_manager_subpanel"
     bl_label = "Script Options"
-    bl_parent_id = "OBJECT_PT_script_manager"  # 指定父面板
+    bl_parent_id = "OBJECT_PT_script_manager"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Script Manager"
@@ -451,9 +398,8 @@ class PT_SCRIPTMANAGERSubPanel(bpy.types.Panel):
         if len(prefs.text_manager_collection) != 0:
             item = prefs.text_manager_collection[prefs.script_manager_index]
             if item.text_pointer:
-                # 在box内部创建一行
                 row = box.row()
-                row.scale_y = 2.0  # 按钮放大
+                row.scale_y = 2.0
                 row.operator("script_manager.run_text", text="Run", icon="PLAY").text_name = item.text_pointer.name
                 row = box.row()
                 row.operator("text_manager.open_in_vscode", text="Open in VSCode", icon="TEXT").text_name = item.text_pointer.name
@@ -465,17 +411,17 @@ class PT_SCRIPTMANAGERSubPanel(bpy.types.Panel):
                 box.prop(item.text_pointer, "filepath", text="Filepath")
                 box.prop(item, "auto_reload", text="Auto Reload", icon="FILE_REFRESH")
                 row1 = box.row()
-                split = row1.split(factor=0.8)  # 左边占 70%，右边占 30%
+                split = row1.split(factor=0.8)
                 split.prop(item, "run_in_frame_update", text="Run In Frame Update", icon="PLAY")
                 split.label(text=f"{item.frame_update_run_time:.2f}ms", icon="RECORD_OFF" if not item.frame_update_flag else "RECORD_ON")
                 row1 = box.row()
-                split = row1.split(factor=0.8)  # 左边占 70%，右边占 30%
+                split = row1.split(factor=0.8)
                 split.prop(item, "run_in_desgaph_update", text="Run In Depsgraph Update", icon="FILE_REFRESH")
                 split.label(text=f"{item.desgaph_update_run_time:.2f}ms", icon="RECORD_OFF" if not item.desgaph_updata_flag else "RECORD_ON")
             else:
-                box.label(text="没有指定文本数据块")
+                box.label(text=_("No text data block specified"))
         else:
-            box.label(text="没有可用的文本数据块")
+            box.label(text=_("No available text data block"))
 
 
 class PT_SCRIPTMANAGERTools(bpy.types.Panel):
@@ -517,7 +463,7 @@ class PT_SCRIPTMANAGERTools(bpy.types.Panel):
                     obj, attr_name = eval(f"({item.path.rsplit('.',1)[0]}, '{item.path.rsplit('.',1)[1]}')")
                     if hasattr(obj, "bl_rna") and attr_name in obj.bl_rna.properties:
                         # row.prop(obj, attr_name, text="", index=0)
-                        # 如果是向量属性（长度 2 或 3）
+                        # 如果是向量属性(长度 2 或 3)
                         attr_value = getattr(obj, attr_name)
                         # 判断是否是颜色属性
                         is_color = False
@@ -536,11 +482,9 @@ class PT_SCRIPTMANAGERTools(bpy.types.Panel):
                     DebugPrint(f"Error previewing property: {e}")
                     row.label(text=f"Error: {e}", icon="ERROR")
             else:
-                row.label(text="无属性路径")
+                row.label(text=_("No property path"))
 
     def format_value(self, value):
-        """统一格式化显示值，保留小数点后五位"""
-
         # 布尔值
         if isinstance(value, bool):
             return str(value)
@@ -550,31 +494,30 @@ class PT_SCRIPTMANAGERTools(bpy.types.Panel):
         elif hasattr(value, "name"):
             return value.name
 
-        # 特殊集合类型（如 bpy.data.collections）
+        # 特殊集合类型(如 bpy.data.collections)
         if "bpy_prop_collection" in str(type(value)) or "bpy.data" in str(type(value)):
             try:
                 items = [item.name for item in list(value)[:3]]
                 return f"({len(value)}) [{', '.join(items)}]" if items else f"({len(value)}) []"
             except:
-                return f"[集合] {len(value)}项"
+                return f"[Collection] {len(value)}items"
 
-        # 可迭代对象（如 list, tuple）
+        # 可迭代对象(如 list, tuple)
         if hasattr(value, "__iter__") and not isinstance(value, (str, bytes)):
             try:
                 items = [self.format_number(x) for x in list(value)[:5]]
                 return f"[{', '.join(items)}]" if items else "[]"
             except:
-                return "[不可遍历]"
+                return _("[Not iterable]")
 
-        # 数值类型（int, float）保留五位小数
+        # 数值类型(int, float)保留五位小数
         if isinstance(value, (int, float)):
             return self.format_number(value)
 
-        # 基础类型（如字符串、布尔值等）
+        # 基础类型(如字符串、布尔值等)
         return str(value)[:50] + ("..." if len(str(value)) > 50 else "")
 
     def format_number(self, x):
-        """统一格式化数值类型，保留五位小数"""
         if isinstance(x, (int, float)):
             return f"{x:.5f}"
         return str(x)[:20]
@@ -592,28 +535,28 @@ class PT_SCRIPTMANAGERDebug(bpy.types.Panel):
         layout = self.layout
         prefs = context.scene.text_manager_prefs
         col = layout.column()
-        col.prop(prefs, "debug_mode", text="打印调试信息", icon="SETTINGS")
-        col.prop(prefs, "auto_reload_in_file_open", text="打开文件时恢复Handler和msgbus", icon="FILE_REFRESH")
-        col.operator("script_manager.remove_addon_handlers", text="移除插件的Handler")
-        col.label(text="插件的handler")
+        col.prop(prefs, "debug_mode", text=_("Print debug info"), icon="SETTINGS")
+        col.prop(prefs, "auto_reload_in_file_open", text=_("Restore handlers and triggers when opening file"), icon="FILE_REFRESH")
+        col.operator("script_manager.remove_addon_handlers", text=_("Remove plugin handler"))
+        col.label(text=_("Plugin handler"))
         box = col.box()
         i = 0
         for handler in bpy.app.handlers.frame_change_pre:
             if hasattr(handler, "_ScriptManagerItem_FC_ID"):
-                box.label(text=f"{i}.帧更新: {handler._ScriptManagerItem_FC_ID}")
+                box.label(text=f"{i}.Frame: {handler._ScriptManagerItem_FC_ID}")
                 i += 1
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
-                box.label(text=f"{i}.依赖图: {handler._ScriptManagerItem_DC_ID}")
+                box.label(text=f"{i}.Deps: {handler._ScriptManagerItem_DC_ID}")
                 i += 1
-        col.operator("script_manager.remove_all_handlers", text="移除所有Handler")
-        col.operator("script_manager.remove_handler", text="移除指定Handler")
-        col.prop(prefs, "handler_index", text="目标Handler")
+        col.operator("script_manager.remove_all_handlers", text=_("Remove all handlers"))
+        col.operator("script_manager.remove_handler", text=_("Remove specified handler"))
+        col.prop(prefs, "handler_index", text=_("Target Handler"))
         i = 0
         frame_change_pre_names = [handler.__name__ for handler in bpy.app.handlers.frame_change_pre]
         depsgraph_update_post_names = [handler.__name__ for handler in bpy.app.handlers.depsgraph_update_post]
         row = col.row()
-        row.label(text="所有handler")
+        row.label(text=_("All handlers"))
         row.prop(prefs, "display_handler_list", text="", icon="TRIA_DOWN" if prefs.display_handler_list else "TRIA_RIGHT")
         box = col.box()
         if prefs.display_handler_list:
@@ -621,14 +564,14 @@ class PT_SCRIPTMANAGERDebug(bpy.types.Panel):
                 row = box.row()
                 if i == prefs.handler_index:
                     row.alert = True  # 高亮这一行
-                row.label(text=f"{i}. 帧更新: {name}")
+                row.label(text=f"{i}. Frame: {name}")
                 i += 1
 
             for name in depsgraph_update_post_names:
                 row = box.row()
                 if i == prefs.handler_index:
                     row.alert = True  # 高亮这一行
-                row.label(text=f"{i}. 依赖图: {name}")
+                row.label(text=f"{i}. Deps: {name}")
                 i += 1
 
 
@@ -645,19 +588,18 @@ def use_frame_update(self, context):
                     has_handler = True
         bpy.app.handlers.frame_change_pre.append(make_ScriptManager_frame_update_handler(item.text_pointer.name))
         if not has_handler:
-            print("添加帧更新回调")
+            print(_("Add frame update"))
         else:
-            print("已更新帧更新回调")
+            print(_("Frame update updated"))
     else:
         for handler in bpy.app.handlers.frame_change_pre:
             if hasattr(handler, "_ScriptManagerItem_FC_ID"):
                 if item.text_pointer.name in handler._ScriptManagerItem_FC_ID:
                     bpy.app.handlers.frame_change_pre.remove(handler)
-        print("移除帧更新回调")
+        print(_("Remove frame update"))
 
 
 def use_desgraph_update(self, context):
-    # 添加和移除 depsgraph 更新回调
     prefs = context.scene.text_manager_prefs
     item = prefs.text_manager_collection[prefs.script_manager_index]
     if item.run_in_desgaph_update:
@@ -669,15 +611,15 @@ def use_desgraph_update(self, context):
                     has_handler = True
         bpy.app.handlers.depsgraph_update_post.append(make_ScriptManager_depsgraph_update_handler(item.text_pointer.name))
         if not has_handler:
-            print("添加 depsgraph 更新回调")
+            print(_("Add depsgraph update"))
         else:
-            print("已更新 depsgraph 更新回调")
+            print(_("Depsgraph update updated"))
     else:
         for handler in bpy.app.handlers.depsgraph_update_post:
             if hasattr(handler, "_ScriptManagerItem_DC_ID"):
                 if item.text_pointer.name in handler._ScriptManagerItem_DC_ID:
                     bpy.app.handlers.depsgraph_update_post.remove(handler)
-        print("移除 depsgraph 更新回调")
+        print(_("Remove depsgraph update"))
 
 
 # NOTE 防止使用相同的TEXT
@@ -689,7 +631,7 @@ def update_text_pointer(self, context):
         if item == self:
             continue
         if item.text_pointer and current_name and item.text_pointer.name == current_name:
-            DebugPrint("当前文本被其他 item 使用")
+            DebugPrint(_("Current text is used by another item"))
             # 重置为 None，或者弹出提示
             item.text_pointer = None
             break
@@ -736,13 +678,12 @@ def auto_reload_timer_callback():
     start_time = time.perf_counter()  # 记录开始时间
     prefs = bpy.context.scene.text_manager_prefs
     # print("自动重载定时器回调")
-    # 遍历所有管理的文本
+
     for item in prefs.text_manager_collection:
         text = item.text_pointer
         if text is None:
             continue
         # print(text.name, text.is_modified, text.is_dirty)
-        # 如果文本被修改（is_modified 为 True）并且有文件路径
         if text.is_modified and text.filepath and os.path.exists(bpy.path.abspath(text.filepath)) and item.auto_reload:
             reload_text_block(text)
 
@@ -755,32 +696,6 @@ def auto_reload_timer_callback():
         return prefs.auto_reload_timer_interval
     else:
         return None
-
-
-# TODO: 重载方式不一样is_modified始终为True
-def reload_text_safely(text: bpy.types.Text) -> bool:
-    if not hasattr(bpy.data.window_managers[0].windows[0].screen.areas[0], "type"):
-        print("不存在area,无法重载")
-        return False
-    temp_area = bpy.data.window_managers[0].windows[0].screen.areas[0]
-    DebugPrint(temp_area)
-    if text is not None:
-        old_area_type = temp_area.type
-        # 临时替换当前的上下文
-        temp_area.type = "TEXT_EDITOR"
-        space = temp_area.spaces
-        DebugPrint(old_area_type)
-        space.active.text = text
-        DebugPrint(bpy.ops.text.reload.poll())
-        if bpy.ops.text.reload.poll():
-            bpy.ops.text.reload()
-        else:
-            # temp_area.type = old_area_type
-            return False
-        # temp_area.type = old_area_type
-        return True
-    else:
-        return False
 
 
 def reload_text_block(text: bpy.types.Text):
@@ -808,18 +723,18 @@ def use_auto_reload_update(self, context):
         # 添加定时器
         if not bpy.app.timers.is_registered(auto_reload_timer_callback):
             bpy.app.timers.register(auto_reload_timer_callback, first_interval=prefs.auto_reload_timer_interval)
-            print("自动重载定时器已启动")
+            print(_("Auto-reload timer started"))
         else:
             bpy.app.timers.unregister(auto_reload_timer_callback)
             bpy.app.timers.register(auto_reload_timer_callback, first_interval=prefs.auto_reload_timer_interval)
-            print("自动重载定时器已重启")
+            print(_("Auto-reload timer restarted"))
     else:
         # 移除定时器
         if bpy.app.timers.is_registered(auto_reload_timer_callback):
             bpy.app.timers.unregister(auto_reload_timer_callback)
-            print("自动重载定时器已停止")
+            print(_("Auto-reload timer stopped"))
         else:
-            print("自动重载定时器未启动")
+            print(_("Auto-reload timer not started"))
 
 
 # NOTE 帧更新回调
@@ -832,7 +747,7 @@ def make_ScriptManager_frame_update_handler(item_name):
             if temp.run_in_frame_update and temp.text_pointer and temp.text_pointer.name == ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID:
                 item = temp
         if item:
-            DebugPrint("帧更新", ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID)
+            DebugPrint("Frame update:", ScriptManager_frame_update_handler._ScriptManagerItem_FC_ID)
             run_text_block(item.text_pointer)
             item.frame_update_flag = not item.frame_update_flag
             item.updata_flag = not item.updata_flag
@@ -853,7 +768,7 @@ def make_ScriptManager_depsgraph_update_handler(item_name):
             if temp.run_in_desgaph_update and temp.text_pointer and temp.text_pointer.name == ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID:
                 item = temp
         if item:
-            DebugPrint("依赖图更新", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
+            DebugPrint("Depsgraph update:", ScriptManager_depsgraph_update_handler._ScriptManagerItem_DC_ID)
             run_text_block(item.text_pointer)
             item.desgaph_updata_flag = not item.desgaph_updata_flag
             item.updata_flag = not item.updata_flag
@@ -890,33 +805,30 @@ def update_script_manager_index(self, context):
 
 
 def get_rna_display_name(path_str: str):
-    """
-    获取 Blender RNA 属性的显示名称（即 UI 标签）
-    例如输入 "bpy.data.scenes['Scene'].cycles.samples"
-    返回 "Render Samples"
-    """
     try:
-        # 分割出属性名（最后一部分）
+        # 分割出属性名(最后一部分)
         # 例如 bpy.data.scenes['Scene'].cycles.samples → samples
         attr_name = path_str.split(".")[-1]
 
-        # 获取对象（不包含最后一段属性名）
+        # 获取对象(不包含最后一段属性名)
         obj_path = ".".join(path_str.split(".")[:-1])
         obj = eval(obj_path)
 
         # 获取属性的 RNA 信息
         rna = getattr(obj, "bl_rna", None)
         if not rna:
-            return f"[Error] 对象 {obj} 没有 RNA 类型"
+            return None
+            # return f"[Error] Object {obj} has no RNA type"
 
         prop = rna.properties.get(attr_name)
         if not prop:
-            return f"[Error] 找不到属性 '{attr_name}'"
+            return None
+            # return f"[Error] Attribute '{attr_name}' not found"
 
         return prop.name
 
     except Exception as e:
-        print(f"Error getting RNA display name for '{path_str}': {e}")
+        # print(f"Error getting RNA display name for '{path_str}': {e}")
         return None
 
 
@@ -967,16 +879,14 @@ class SCRIPTMANAGER_UL_MsgBus(bpy.types.UIList):
         # op1.RNA_path = item.RNA_path
         # row.prop(item, "is_registered", text="", icon="HIDE_OFF" if item.is_registered else "HIDE_ON")
         subrow = row.row(align=True)  # 创建子布局
-        subrow.enabled = item.RNA_path != "" and item.text_pointer != None  # 禁用交互（灰化）
+        subrow.enabled = item.RNA_path != "" and item.text_pointer != None  # 禁用交互(灰化)
         subrow.prop(item, "is_registered", text="", icon="RECORD_ON" if item.is_registered else "RECORD_OFF")
-        # row.label(text="", icon="RECORD_ON" if not item.update_flag else "RECORD_OFF")
         row.label(text=f"{item.msgbus_run_time:.2f}ms", icon="TIME")
-        # row.label(text="ID:" + generate_unique_id(item.RNA_path))
 
 
 class ScriptManagerMsgBusPanel(bpy.types.Panel):
     bl_idname = "VIEW3D_PT_ScriptManagerMsgBusPanel"
-    bl_label = "触发器"
+    bl_label = "Trigger"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Script Manager"
@@ -985,10 +895,10 @@ class ScriptManagerMsgBusPanel(bpy.types.Panel):
         layout = self.layout
         col = layout.column()
         box = col.box()
-        box.label(text="使用msgbus监控属性变化")
-        box.label(text="只适用于RNA属性,视图更新和动画更新不起作用")
-        box.label(text="几何节点的插槽属性没有作用")
-        box.label(text="条目内容:   备注   |   监控属性路径    |   执行的脚本   |   是否运行    |   上次运行耗时")
+        box.label(text=_("Monitor property changes using msgbus"))
+        box.label(text=_("Only works for RNA properties; view updates and animation updates have no effect"))
+        box.label(text=_("Geometry node socket properties are not supported"))
+        box.label(text=_("Item content:   Note   |   Monitored property path    |   Script to execute   |   Is active    |   Last execution time"))
         row = col.row()
         row.template_list("SCRIPTMANAGER_UL_MsgBus", "", context.scene.text_manager_prefs, "msgbus_collection", context.scene.text_manager_prefs, "msgbus_index", rows=5)
         col1 = row.column(align=True)
@@ -1021,7 +931,7 @@ class ScriptManagerMsgBus_OT_remove_item(bpy.types.Operator):
         idx = prefs.msgbus_index
         if 0 <= idx < len(prefs.msgbus_collection):
             if prefs.msgbus_collection[idx].is_registered:
-                self.report({"ERROR"}, "该项未注销,请先注销后再删除")
+                self.report({"ERROR"}, _("This item is not unregistered. Please unregister it before deleting."))
                 return {"CANCELLED"}
             prefs.msgbus_collection.remove(idx)
             prefs.msgbus_index = max(0, idx - 1)
@@ -1054,18 +964,6 @@ class ScriptManagerMsgBus_OT_move_item_down(bpy.types.Operator):
         return {"FINISHED"}
 
 
-# 输入一个字符串，输出一个唯一的ID
-def generate_unique_id(path_str: str, length: int = 5) -> str:
-    # 使用 SHA-256 哈希输入，确保唯一
-    hash_obj = hashlib.sha256(path_str.encode("utf-8"))
-    hash_hex = hash_obj.hexdigest()
-
-    # 取前 length 位
-    unique_id = hash_hex[:length]
-
-    return unique_id
-
-
 # NOTE 制作属性监听回调函数
 def make_ScriptManagerMsgBus_update_callback(index):
     def ScriptManagerMsgBus_update_callback():
@@ -1077,7 +975,7 @@ def make_ScriptManagerMsgBus_update_callback(index):
         msgbus_collection[index].update_flag = not msgbus_collection[index].update_flag
         end_time = time.perf_counter()  # 记录结束时间
         msgbus_collection[index].msgbus_run_time = (end_time - start_time) * 1000
-        DebugPrint(f"MsgBus属性更新了,执行{msgbus_collection[index].text_pointer.name},耗时 {msgbus_collection[index].msgbus_run_time:.2f}ms")
+        DebugPrint(f"Triggered property updated, executing {msgbus_collection[index].text_pointer.name}, took {msgbus_collection[index].msgbus_run_time:.2f} ms")
 
     return ScriptManagerMsgBus_update_callback
 
@@ -1094,11 +992,11 @@ class ScriptManagerMsgBus_OT_register_msgbus(bpy.types.Operator):
         RNA_path = pref.msgbus_collection[self.index].RNA_path
         text_name = pref.msgbus_collection[self.index].text_pointer.name if pref.msgbus_collection[self.index].text_pointer else ""
         if RNA_path == "" or text_name == "":
-            self.report({"ERROR"}, f"路径或脚本不能为空: {RNA_path} - {text_name}")
+            self.report({"ERROR"}, f"Path or script cannot be empty: {RNA_path} - {text_name}")
             return {"CANCELLED"}
         valid_path, key = get_msgbus_key(RNA_path)
         if RNA_path and valid_path and text_name != "":
-            self.report({"INFO"}, f"注册MsgBus监控: {RNA_path} - {text_name}-key: {key}")
+            self.report({"INFO"}, f"Register Trigger monitoring: {RNA_path} - {text_name}-key: {key}")
 
             bpy.msgbus.subscribe_rna(
                 key=key,
@@ -1108,39 +1006,36 @@ class ScriptManagerMsgBus_OT_register_msgbus(bpy.types.Operator):
             )
             return {"FINISHED"}
         else:
-            self.report({"ERROR"}, f"路径无效或指定的脚本为空: {RNA_path}")
+            self.report({"ERROR"}, f"Invalid path or the specified script is empty: {RNA_path}")
             return {"CANCELLED"}
-        # 将数据路径转换为key
 
 
 def get_msgbus_key(path_str: str) -> tuple[bool, object]:
     try:
-        # 步骤1: 解析路径，提取基对象字符串和属性名
-        # 假设路径以 .property 结尾，使用字符串分割
         if "." not in path_str:
-            raise ValueError("路径必须包含属性，如 'bpy.data.scenes[\"Scene\"].frame_current'")
+            return False, None
+            # raise ValueError("路径必须包含属性，如 'bpy.data.scenes[\"Scene\"].frame_current'")
 
         parts = path_str.split(".")
         property_name = parts[-1]  # 最后一个部分是属性名，如 'frame_current'
         base_str = ".".join(parts[:-1])  # 基对象，如 'bpy.data.scenes["Scene"]'
 
-        # 步骤2: 在安全的 bpy 命名空间中评估基对象
-        # 使用 globals() 只包含 bpy，避免 eval 风险
         base_obj = eval(base_str, {"__builtins__": {}}, {"bpy": bpy})
 
         if base_obj is None:
-            raise ValueError(f"无法解析基对象: {base_str}")
+            return False, None
+            # raise ValueError(f"无法解析基对象: {base_str}")
 
-        # 步骤3: 使用 path_resolve 获取 RNA key（coerce=False 确保纯 RNA 指针）
         key = base_obj.path_resolve(property_name, False)
 
         if key is None:
-            raise ValueError(f"属性 '{property_name}' 在对象中无效")
+            return False, None
+            # raise ValueError(f"属性 '{property_name}' 在对象中无效")
 
         return True, key
 
     except Exception as e:
-        print(f"解析错误: {e}")
+        print(f"Parsing error: {e}")
         return False, None
 
 
@@ -1154,10 +1049,10 @@ class ScriptManagerMsgBus_OT_unregister_msgbus(bpy.types.Operator):
         if self.RNA_path != "":
             # print(f"注销MsgBus监控: {self.RNA_path}")
             bpy.msgbus.clear_by_owner(sys.intern(str(self.RNA_path).strip()))
-            self.report({"INFO"}, f"注销MsgBus监控: {self.RNA_path}")
+            self.report({"INFO"}, f"Unregister Trigger monitoring: {self.RNA_path}")
         else:
             pass
-            self.report({"ERROR"}, f"路径无效: {self.RNA_path}")
+            self.report({"ERROR"}, f"Invalid path: {self.RNA_path}")
         return {"FINISHED"}
 
 
@@ -1166,7 +1061,7 @@ class ScriptManagerPrefs(bpy.types.PropertyGroup):
     # 是否启用自动重载定时器
     use_auto_reload_timer: BoolProperty(name="Use Auto Reload Timer", default=False, update=use_auto_reload_update)
     # 自动重载定时器间隔
-    auto_reload_timer_interval: FloatProperty(name="Auto Reload Timer Interval (s)", default=5.0, min=1)
+    auto_reload_timer_interval: FloatProperty(name="Auto Reload Timer Interval (s)", default=1.0, min=1)
     auto_reload_use_time: FloatProperty(name="Auto Reload Use Time", default=0.0)
     frame_handler_registered: BoolProperty(name="Frame Handler Registered", default=False)
     deps_handler_registered: BoolProperty(name="Deps Handler Registered", default=False)
@@ -1197,8 +1092,6 @@ classes = (
     ScriptManagerMsgBusPanel,
     PT_SCRIPTMANAGERTools,
     PT_SCRIPTMANAGERDebug,
-    SCRIPTMANAGER_OT_TestOperator,
-    SCRIPTMANAGER_OT_Test1Operator,
     SCRIPTMANAGER_OT_remove_all_handlers,
     SCRIPTMANAGER_OT_remove_handler,
     SCRIPTMANAGER_OT_add_item,
@@ -1222,8 +1115,7 @@ classes = (
 
 @bpy.app.handlers.persistent
 def ScriptManager_load_post_handler(dummy):
-    """文件加载完成后的处理函数"""
-    print("ScriptManager: 加载了新文件")
+    # print("ScriptManager: 加载了新文件")
 
     # 延迟执行以确保上下文完全准备好
     def delayed_restore():
@@ -1238,19 +1130,19 @@ def restore_handlers():
     # 检查上下文是否准备就绪
     try:
         if not hasattr(bpy.context, "scene") or not bpy.context.scene:
-            print("ScriptManager: 上下文未准备好")
+            print("ScriptManager: Context not ready")
             return False
     except:
-        print("ScriptManager: 无法访问上下文")
+        print("ScriptManager: Cannot access context")
         return False
 
     try:
         prefs = bpy.context.scene.text_manager_prefs
         if not prefs:
-            print("ScriptManager: prefs未准备好")
+            print("ScriptManager: Preferences not ready")
             return False
     except:
-        print("ScriptManager: 无法访问prefs")
+        print("ScriptManager: Cannot access preferences")
         return False
 
     handlers_restored = False
@@ -1271,7 +1163,7 @@ def restore_handlers():
             if not has_handler:
                 handler_func = make_ScriptManager_frame_update_handler(item.text_pointer.name)
                 bpy.app.handlers.frame_change_pre.append(handler_func)
-                print(f"ScriptManager: 恢复帧更新handler: {item.text_pointer.name}")
+                print(f"ScriptManager: Restore frame update: {item.text_pointer.name}")
                 handlers_restored = True
                 frame_handlers_num += 1
 
@@ -1289,7 +1181,7 @@ def restore_handlers():
             if not has_handler:
                 handler_func = make_ScriptManager_depsgraph_update_handler(item.text_pointer.name)
                 bpy.app.handlers.depsgraph_update_post.append(handler_func)
-                print(f"ScriptManager: 恢复依赖图更新handler: {item.text_pointer.name}")
+                print(f"ScriptManager: Restore depsgraph update handler: {item.text_pointer.name}")
                 handlers_restored = True
                 deps_handlers_num += 1
     # 恢复msgbus
@@ -1298,11 +1190,11 @@ def restore_handlers():
             RNA_path = prefs.msgbus_collection[i].RNA_path
             text_name = prefs.msgbus_collection[i].text_pointer.name if prefs.msgbus_collection[i].text_pointer else ""
             if RNA_path == "" or text_name == "":
-                DebugPrint(f"ScriptManager: 路径或脚本不能为空: {RNA_path} - {text_name}")
+                DebugPrint(f"ScriptManager: Path or script cannot be empty: {RNA_path} - {text_name}")
                 continue
             valid_path, key = get_msgbus_key(RNA_path)
             if RNA_path and valid_path and text_name != "":
-                DebugPrint(f"ScriptManager: 注册MsgBus监控: {RNA_path} - {text_name}-key: {key}")
+                DebugPrint(f"ScriptManager: Register Trigger monitoring: {RNA_path} - {text_name}-key: {key}")
 
                 bpy.msgbus.subscribe_rna(
                     key=key,
@@ -1313,13 +1205,13 @@ def restore_handlers():
                 handlers_restored = True
                 msgbus_num += 1
             else:
-                DebugPrint(f"ScriptManager: 路径无效或指定的脚本为空: {RNA_path}")
+                DebugPrint(f"ScriptManager: Invalid path or the specified script is empty: {RNA_path}")
                 continue
 
     if handlers_restored:
-        print(f"ScriptManager: 恢复完成,恢复了{frame_handlers_num}个帧更新handler, {deps_handlers_num}个依赖图更新handler, {msgbus_num}个MsgBus监控")
+        print(f"ScriptManager: Restore complete, restored {frame_handlers_num} frame update, {deps_handlers_num} depsgraph update, {msgbus_num} Trigger monitors")
     else:
-        print("ScriptManager: 没有需要恢复的handlers")
+        print("ScriptManager: No update to restore")
 
     return handlers_restored
 
@@ -1328,13 +1220,12 @@ def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.text_manager_prefs = PointerProperty(type=ScriptManagerPrefs)
-    print("ScriptManager: 脚本管理器注册成功")
 
     # 注册文件加载完成后的处理函数
     bpy.app.handlers.load_post.append(ScriptManager_load_post_handler)
-    print("ScriptManager: 已注册ScriptManager_load_post_handler")
+    load_language()
 
-    # 在注册完成后恢复handlers（针对插件重新启用的情况）
+    # 在注册完成后恢复handlers(针对插件重新启用的情况)
     def delayed_restore():
         restore_handlers()
         return None
@@ -1346,7 +1237,6 @@ def unregister():
     # 移除文件加载完成后的处理函数
     if ScriptManager_load_post_handler in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(ScriptManager_load_post_handler)
-        print("ScriptManager: 已移除ScriptManager_load_post_handler")
 
     del bpy.types.Scene.text_manager_prefs
 
