@@ -10,6 +10,8 @@ class ScriptManagerAddonPreferences(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "vscode_path")
+        layout.operator("script_manager.open_github", text=translations("Open GitHub"), icon="URL")
+        layout.label(text="Developed with by LEDingQ.", icon="FUND")
 
 
 class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
@@ -23,7 +25,7 @@ class PT_SCRIPTMANAGERPanel(bpy.types.Panel):
         scene = context.scene
         layout = self.layout
         col = layout.column()
-        col.operator("script_manager.new_text", text=translations("New Text"))
+        col.operator("script_manager.new_text", text=translations("New Script"), icon="FILE_SCRIPT")
         row = col.row()
         row.template_list("SCRIPTMANAGER_UL_texts", "", scene.text_manager_prefs, "text_manager_collection", scene.text_manager_prefs, "script_manager_index", rows=6)
         col1 = row.column(align=True)
@@ -256,6 +258,7 @@ class PT_SCRIPTMANAGERDebug(bpy.types.Panel):
                     row.alert = True  # 高亮这一行
                 row.label(text=f"{i}. Deps: {name}")
                 i += 1
+        col.operator("script_manager.open_github", text=translations("Open GitHub"), icon="URL")
 
 
 # item面板

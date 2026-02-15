@@ -3,7 +3,7 @@ import bpy
 translations_dict = {
     "zh_CN": {
         # --- 基础 UI 与 设置 ---
-        ("*", "New Text"): "新文本",
+        ("*", "New Script"): "新建脚本",
         ("*", "Use Auto Reload Timer"): "使用自动重载定时器",
         ("*", "VSCode Path"): "VSCode 路径",
         ("*", "Print debug info"): "打印调试信息",

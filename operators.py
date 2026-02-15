@@ -4,6 +4,7 @@ from .utils import *
 from .i18n import *
 from bpy.props import StringProperty, IntProperty
 import sys
+import webbrowser  # 导入浏览器控制库
 
 
 class SCRIPTMANAGER_OT_remove_all_handlers(bpy.types.Operator):
@@ -131,7 +132,7 @@ class SCRIPTMANAGER_OT_new_text(bpy.types.Operator):
     bl_label = "New Text"
     bl_description = "Create a new Blender text and add to the manager"
     bl_options = {"REGISTER", "UNDO"}
-    text_name: StringProperty(name="Text Name", default="New Script")
+    text_name: StringProperty(name="Text Name", default="New Script.py")
 
     def execute(self, context):
         prefs = context.scene.text_manager_prefs
@@ -365,6 +366,17 @@ class ScriptManagerMsgBus_OT_unregister_msgbus(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class SCRIPTMANAGER_OT_open_github(bpy.types.Operator):
+    bl_idname = "script_manager.open_github"
+    bl_label = "Open GitHub Page"
+    bl_description = "Open the GitHub repository for this addon"
+
+    def execute(self, context):
+        github_url = "https://github.com/bb-yi/Script_Manager"
+        webbrowser.open(github_url)
+        return {"FINISHED"}
+
+
 classes = [
     SCRIPTMANAGER_OT_remove_all_handlers,
     SCRIPTMANAGER_OT_remove_addon_handlers,
@@ -384,6 +396,7 @@ classes = [
     ScriptManagerMsgBus_OT_move_item_down,
     ScriptManagerMsgBus_OT_register_msgbus,
     ScriptManagerMsgBus_OT_unregister_msgbus,
+    SCRIPTMANAGER_OT_open_github,
 ]
 
 

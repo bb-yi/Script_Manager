@@ -3,7 +3,7 @@ bl_info = {
     "author": "LEDingQ",
     "description": "",
     "blender": (3, 4, 0),
-    "version": (0, 1, 4),
+    "version": (0, 2, 0),
     "location": "",
     "warning": "",
     "category": "Generic",
